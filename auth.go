@@ -83,11 +83,5 @@ func login(fbSession firebase.FirebaseAuthSession) (*BeRealSession, error) {
 		return nil, errors.New(string(body))
 	}
 
-	var parsed BeRealSession
-	err = json.Unmarshal(body, &parsed)
-	if err != nil {
-		return nil, err
-	}
-
-	return &parsed, nil
+	return NewBeRealSession(string(body))
 }
