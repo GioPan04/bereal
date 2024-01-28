@@ -1,7 +1,6 @@
 package bereal
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -38,10 +37,7 @@ func VerifyOtp(otp string, sessionToken string) (*BeRealSession, error) {
 		return nil, err
 	}
 
-	j, _ := json.Marshal(firebaseAuth)
-	fmt.Println(string(j))
-
-	return login(*firebaseAuth)
+	return firebaseLogin(*firebaseAuth)
 }
 
 func LoginFromFirebase(src string) (*BeRealSession, error) {
@@ -50,19 +46,30 @@ func LoginFromFirebase(src string) (*BeRealSession, error) {
 		return nil, err
 	}
 
-	return login(*session)
+	return firebaseLogin(*session)
 }
 
-func login(fbSession firebase.FirebaseAuthSession) (*BeRealSession, error) {
-	url := "https://auth.bereal.team/token?grant_type=firebase"
-	reqBody, _ := encodeBody(map[string]string{
-		"grant_type":    "firebase",
+func firebaseLogin(firebase firebase.FirebaseAuthSession) (*BeRealSession, error) {
+	return login("firebase", firebase.AccessToken)
+}
+
+func login(grant_type string, token string) (*BeRealSession, error) {
+	url := "https://auth.bereal.team/token?grant_type=" + grant_type
+	reqBody := map[string]string{
+		"grant_type":    grant_type,
 		"client_id":     "ios",
 		"client_secret": "962D357B-B134-4AB6-8F53-BEA2B7255420",
-		"token":         fbSession.AccessToken,
-	})
+	}
 
-	req, _ := http.NewRequest("POST", url, reqBody)
+	if grant_type == "refresh_token" {
+		reqBody["refresh_token"] = token
+	} else {
+		reqBody["token"] = token
+	}
+
+	encodedBody, _ := encodeBody(reqBody)
+
+	req, _ := http.NewRequest("POST", url, encodedBody)
 	req.Header.Set("user-agent", "BeReal/1.0.1 (AlexisBarreyat.BeReal; build:9513; iOS 16.0.2) 1.0.0/BRApriKit")
 	req.Header.Set("x-ios-bundle-identifier", "AlexisBarreyat.BeReal")
 	req.Header.Set("Content-Type", "application/json")
@@ -84,4 +91,15 @@ func login(fbSession firebase.FirebaseAuthSession) (*BeRealSession, error) {
 	}
 
 	return NewBeRealSession(string(body))
+}
+
+func (s *BeRealSession) RefreshSession() error {
+	session, err := login("refresh_token", s.RefreshToken)
+	if err != nil {
+		return err
+	}
+
+	*s = *session
+
+	return nil
 }
